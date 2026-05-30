@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tarjim · Arabic → English Voice Translator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=IBM+Plex+Mono:wght@400;500&family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg-void:      #080c14;
+      --bg-surface:   #0d1420;
+      --bg-elevated:  #131c2e;
+      --bg-rim:       #1a2540;
+      --neon:         #3b9eff;
+      --neon-dim:     rgba(59,158,255,0.18);
+      --neon-glow:    rgba(59,158,255,0.55);
+      --emerald:      #2effa0;
+      --emerald-dim:  rgba(46,255,160,0.12);
+      --emerald-glow: rgba(46,255,160,0.45);
+      --amber:        #ffb830;
+      --amber-dim:    rgba(255,184,48,0.10);
+      --red:          #ff4c6a;
+      --red-dim:      rgba(255,76,106,0.14);
+      --font-display: 'Syne', sans-serif;
+      --font-mono:    'IBM Plex Mono', monospace;
+      --font-arabic:  'Tajawal', sans-serif;
+      --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100%;
+      background: var(--bg-void);
+      color: #e2e8f0;
+      font-family: var(--font-display);
+      overflow: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 70% 50% at 50% -10%, rgba(59,158,255,0.12) 0%, transparent 70%),
+        radial-gradient(ellipse 50% 40% at 80% 110%, rgba(46,255,160,0.06) 0%, transparent 60%);
+      pointer-events: none;
+      z-index: 0;
+    }
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0.6;
+    }
+    #app {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      height: 100vh;
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 0 1.5rem;
+    }
+    #header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1.4rem 0 1rem;
+      border-bottom: 1px solid var(--bg-rim);
+    }
+    .logo { display: flex; align-items: baseline; gap: 0.5rem; }
+    .logo-word { font-size: 1.45rem; font-weight: 800; letter-spacing: -0.03em; color: #fff; }
+    .logo-arabic { font-family: var(--font-arabic); font-size: 1.1rem; font-weight: 700; color: var(--amber); opacity: 0.7; }
+    .badge { font-family: var(--font-mono); font-size: 0.65rem; font-weight: 500; letter-spacing: 0.08em; padding: 0.25rem 0.6rem; border: 1px solid var(--bg-rim); border-radius: 2rem; color: #64748b; text-transform: uppercase; }
+    #stage { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2rem; padding: 1rem 0; }
+    .lang-pair { display: flex; align-items: center; gap: 1rem; font-family: var(--font-mono); font-size: 0.72rem; letter-spacing: 0.12em; color: #475569; text-transform: uppercase; }
+    .lang-pair .arrow { color: var(--neon); font-size: 1rem; }
+    .lang-pill { padding: 0.2rem 0.7rem; border: 1px solid var(--bg-rim); border-radius: 2rem; }
+    .mic-wrap { position: relative; display: flex; align-items: center; justify-content: center; width: 200px; height: 200px; }
+    .ring { position: absolute; border-radius: 50%; border: 1.5px solid var(--neon); opacity: 0; pointer-events: none; }
+    .ring-1 { width: 200px; height: 200px; }
+    .ring-2 { width: 260px; height: 260px; }
+    .ring-3 { width: 320px; height: 320px; }
+    .mic-wrap.active .ring-1 { animation: pulse-ring 2.0s var(--ease-out) infinite 0.0s; }
+    .mic-wrap.active .ring-2 { animation: pulse-ring 2.0s var(--ease-out) infinite 0.4s; }
+    .mic-wrap.active .ring-3 { animation: pulse-ring 2.0s var(--ease-out) infinite 0.8s; }
+    .mic-wrap.connecting .ring-1 { animation: pulse-connecting 1.4s ease-in-out infinite; }
+    @keyframes pulse-ring {
+      0%   { transform: scale(0.88); opacity: 0.8; }
+      100% { transform: scale(1.22); opacity: 0;   }
+    }
+    @keyframes pulse-connecting {
+      0%, 100% { opacity: 0.1; transform: scale(0.92); }
+      50%       { opacity: 0.5; transform: scale(1.05); }
+    }
+    #mic-btn {
+      position: relative;
+      z-index: 2;
+      width: 140px;
+      height: 140px;
+      border-radius: 50%;
+      border: 2px solid var(--neon);
+      background: var(--bg-surface);
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.4rem;
+      transition: border-color 0.3s, box-shadow 0.3s, transform 0.15s;
+      box-shadow: 0 0 0 0 var(--neon-glow), 0 0 30px -8px var(--neon-glow), inset 0 1px 0 rgba(255,255,255,0.06);
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      outline: none;
+    }
+    #mic-btn:hover { transform: scale(1.04); box-shadow: 0 0 0 8px var(--neon-dim), 0 0 50px -8px var(--neon-glow), inset 0 1px 0 rgba(255,255,255,0.08); }
+    #mic-btn:active { transform: scale(0.97); }
+    .mic-wrap.active #mic-btn { border-color: var(--emerald); box-shadow: 0 0 0 10px var(--emerald-dim), 0 0 55px -8px var(--emerald-glow), inset 0 1px 0 rgba(255,255,255,0.08); }
+    .mic-wrap.connecting #mic-btn { border-color: var(--neon); animation: btn-connecting 1.4s ease-in-out infinite; }
+    .mic-wrap.error #mic-btn { border-color: var(--red); box-shadow: 0 0 0 8px var(--red-dim), 0 0 40px -8px rgba(255,76,106,0.5), inset 0 1px 0 rgba(255,255,255,0.06); }
+    @keyframes btn-connecting {
+      0%, 100% { box-shadow: 0 0 0 0 var(--neon-dim),  0 0 30px -8px var(--neon-glow); }
+      50%       { box-shadow: 0 0 0 14px var(--neon-dim), 0 0 55px -4px var(--neon-glow); }
+    }
+    .mic-icon { width: 38px; height: 38px; transition: color 0.3s; color: var(--neon); }
+    .mic-wrap.active .mic-icon { color: var(--emerald); }
+    .mic-wrap.error .mic-icon { color: var(--red); }
+    .mic-wrap.connecting .mic-icon { color: var(--neon); opacity: 0.7; }
+    .mic-caption { font-family: var(--font-mono); font-size: 0.58rem; letter-spacing: 0.14em; text-transform: uppercase; color: #64748b; transition: color 0.3s; }
+    .mic-wrap.active .mic-caption { color: var(--emerald); }
+    .mic-wrap.error .mic-caption { color: var(--red); }
+    #status { display: flex; align-items: center; gap: 0.5rem; font-family: var(--font-mono); font-size: 0.72rem; letter-spacing: 0.08em; color: #475569; min-height: 1.2em; transition: color 0.3s; }
+    #status .dot { width: 6px; height: 6px; border-radius: 50%; background: #475569; flex-shrink: 0; transition: background 0.3s; }
+    #status.listening { color: var(--neon); }
+    #status.listening .dot { background: var(--neon); animation: dot-blink 1s ease-in-out infinite; }
+    #status.translating { color: var(--amber); }
+    #status.translating .dot { background: var(--amber); animation: dot-blink 0.7s ease-in-out infinite; }
+    #status.speaking { color: var(--emerald); }
+    #status.speaking .dot { background: var(--emerald); animation: dot-blink 1.2s ease-in-out infinite; }
+    #status.error { color: var(--red); }
+    #status.error .dot { background: var(--red); }
+    @keyframes dot-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.2; } }
+    #transcript-wrap { padding-bottom: 1.5rem; display: flex; flex-direction: column; min-height: 0; }
+    #transcript-header { display: flex; align-items: center; justify-content: space-between; padding: 0.75rem 0 0.6rem; border-top: 1px solid var(--bg-rim); }
+    .transcript-label { font-family: var(--font-mono); font-size: 0.62rem; letter-spacing: 0.14em; text-transform: uppercase; color: #334155; }
+    #clear-btn { background: none; border: 1px solid var(--bg-rim); border-radius: 4px; color: #334155; font-family: var(--font-mono); font-size: 0.6rem; letter-spacing: 0.08em; padding: 0.2rem 0.55rem; cursor: pointer; transition: border-color 0.2s, color 0.2s; }
+    #clear-btn:hover { border-color: #475569; color: #64748b; }
+    #transcript { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 0.65rem; padding: 0.5rem 0 0.25rem; scroll-behavior: smooth; max-height: 220px; }
+    #transcript::-webkit-scrollbar { width: 4px; }
+    #transcript::-webkit-scrollbar-track { background: transparent; }
+    #transcript::-webkit-scrollbar-thumb { background: var(--bg-rim); border-radius: 2px; }
+    #transcript-empty { display: flex; align-items: center; justify-content: center; padding: 1.5rem; font-family: var(--font-mono); font-size: 0.68rem; color: #1e293b; letter-spacing: 0.06em; text-align: center; line-height: 1.7; }
+    .msg { display: flex; flex-direction: column; gap: 0.15rem; animation: msg-in 0.35s var(--ease-out) both; }
+    @keyframes msg-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    .msg.user { align-items: flex-end; }
+    .msg.user .bubble { direction: rtl; text-align: right; font-family: var(--font-arabic); font-size: 0.95rem; font-weight: 500; color: var(--amber); background: var(--amber-dim); border: 1px solid rgba(255,184,48,0.18); border-radius: 14px 14px 4px 14px; padding: 0.55rem 0.85rem; max-width: 82%; line-height: 1.6; }
+    .msg.agent { align-items: flex-start; }
+    .msg.agent .bubble { font-size: 0.9rem; font-weight: 400; color: #e2e8f0; background: var(--emerald-dim); border: 1px solid rgba(46,255,160,0.15); border-left: 3px solid var(--emerald); border-radius: 4px 14px 14px 14px; padding: 0.55rem 0.85rem; max-width: 82%; line-height: 1.6; }
+    .msg.agent .bubble-label { font-family: var(--font-mono); font-size: 0.58rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--emerald); opacity: 0.7; margin-bottom: 0.1rem; padding-left: 0.1rem; }
+    .msg .ts { font-family: var(--font-mono); font-size: 0.57rem; color: #1e293b; padding: 0 0.1rem; }
+    @media (max-height: 700px) {
+      .mic-wrap { width: 160px; height: 160px; }
+      #mic-btn { width: 110px; height: 110px; }
+      .ring-1 { width: 160px; height: 160px; }
+      .ring-2 { width: 210px; height: 210px; }
+      .ring-3 { width: 260px; height: 260px; }
+      #transcript { max-height: 150px; }
+    }
+    @media (max-width: 480px) {
+      .mic-wrap { width: 160px; height: 160px; }
+      #mic-btn { width: 110px; height: 110px; }
+    }
+  </style>
+</head>
+<body>
+<div id="app">
+  <header id="header">
+    <div class="logo">
+      <span class="logo-word">Tarjim</span>
+      <span class="logo-arabic">ترجم</span>
+    </div>
+    <span class="badge">Deepgram Voice Agent</span>
+  </header>
+
+  <main id="stage">
+    <div class="lang-pair">
+      <span class="lang-pill">Arabic · AR</span>
+      <span class="arrow">→</span>
+      <span class="lang-pill">English · EN</span>
+    </div>
+
+    <div class="mic-wrap" id="mic-wrap">
+      <div class="ring ring-1"></div>
+      <div class="ring ring-2"></div>
+      <div class="ring ring-3"></div>
+
+      <button id="mic-btn" aria-label="Start voice translation" title="Tap to speak Arabic">
+        <svg class="mic-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="9" y="2" width="6" height="11" rx="3"/>
+          <path d="M5 10a7 7 0 0 0 14 0"/>
+          <line x1="12" y1="19" x2="12" y2="22"/>
+          <line x1="8"  y1="22" x2="16" y2="22"/>
+        </svg>
+        <span class="mic-caption" id="btn-caption">Tap to Speak</span>
+      </button>
+    </div>
+
+    <div id="status">
+      <span class="dot"></span>
+      <span id="status-text">Ready</span>
+    </div>
+  </main>
+
+  <section id="transcript-wrap">
+    <div id="transcript-header">
+      <span class="transcript-label">Live Transcript</span>
+      <button id="clear-btn">Clear</button>
+    </div>
+    <div id="transcript">
+      <div id="transcript-empty">Speak Arabic · translation appears here</div>
+    </div>
+  </section>
+</div>
+
+<script>
+const DEEPGRAM_WS_ENDPOINT = "ws://127.0.0.1:8000/ws/agent";
+const SAMPLE_RATE          = 16000;
+const FRAMES_PER_BUFFER    = 512;
+
+const SETTINGS_PAYLOAD = {
+  type: "Settings",
+  audio: {
+    input:  { encoding: "linear16", sample_rate: SAMPLE_RATE },
+    output: { encoding: "linear16", sample_rate: SAMPLE_RATE, container: "none" },
+  },
+  agent: {
+    listen: { provider: { type: "deepgram", version: "v1", model: "nova-3", language: "ar" } },
+    think: {
+      provider: { type: "open_ai", model: "gpt-4o-mini" },
+      prompt: "You are a specialized real-time translator. The user will speak to you in Arabic. Instantly translate their speech into natural, conversational English. Do not add commentary, pleasantries, or explanations. Output ONLY the English translation text."
+    },
+    speak: { provider: { type: "deepgram", model: "aura-2-thalia-en" } },
+  },
+};
+
+let appState = "idle";
+let audioCtx        = null;
+let micStream       = null;
+let micSourceNode   = null;
+let processorNode   = null;
+let ws              = null;
+
+let nextAudioPlayTime = 0; // Absolute scheduling anchor clock
+
+const micWrap      = document.getElementById("mic-wrap");
+const micBtn       = document.getElementById("mic-btn");
+const btnCaption   = document.getElementById("btn-caption");
+const statusEl     = document.getElementById("status");
+const statusText   = document.getElementById("status-text");
+const transcript   = document.getElementById("transcript");
+const emptyMsg     = document.getElementById("transcript-empty");
+const clearBtn     = document.getElementById("clear-btn");
+
+function applyUI(state, statusMsg, statusClass = "") {
+  appState = state;
+  micWrap.className = "mic-wrap " + (state !== "idle" ? state : "");
+  const captions = { idle: "Tap to Speak", connecting: "Connecting…", active: "Listening", error: "Try Again" };
+  btnCaption.textContent = captions[state] || "Tap to Speak";
+  statusEl.className = statusClass ? `${statusClass}` : "";
+  statusText.textContent = statusMsg;
+  micBtn.setAttribute("aria-label", state === "active" ? "Stop voice translation" : "Start voice translation");
+}
+
+function addTranscript(role, text) {
+  if (!text || !text.trim()) return;
+  const placeholder = document.getElementById("transcript-empty");
+  if (placeholder) placeholder.remove();
+
+  const now = new Date();
+  const ts = now.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+
+  const msgEl = document.createElement("div");
+  msgEl.className = `msg ${role}`;
+
+  if (role === "agent") {
+    msgEl.innerHTML = `<div class="bubble-label">✦ Translation</div><div class="bubble">${escapeHtml(text)}</div><div class="ts">${ts}</div>`;
+  } else {
+    msgEl.innerHTML = `<div class="bubble">${escapeHtml(text)}</div><div class="ts">${ts}</div>`;
+  }
+
+  transcript.appendChild(msgEl);
+  transcript.scrollTo({ top: transcript.scrollHeight, behavior: "smooth" });
+}
+
+function escapeHtml(str) {
+  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+async function fetchToken() {
+  const res = await fetch("/api/authenticate");
+  if (!res.ok) throw new Error(`Auth failed: ${await res.text()}`);
+  const data = await res.json();
+  return data.token;
+}
+
+async function startMicCapture() {
+  micStream = await navigator.mediaDevices.getUserMedia({
+    audio: { sampleRate: SAMPLE_RATE, channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+  });
+
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: SAMPLE_RATE });
+  if (audioCtx.state === "suspended") await audioCtx.resume();
+
+  // Use AudioWorklet instead of deprecated ScriptProcessorNode
+  const workletCode = `
+    class PCMProcessor extends AudioWorkletProcessor {
+      process(inputs) {
+        const input = inputs[0];
+        if (input && input[0]) {
+          const float32 = input[0];
+          const int16 = new Int16Array(float32.length);
+          for (let i = 0; i < float32.length; i++) {
+            const clamped = Math.max(-1, Math.min(1, float32[i]));
+            int16[i] = clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff;
+          }
+          this.port.postMessage(int16.buffer, [int16.buffer]);
+        }
+        return true;
+      }
+    }
+    registerProcessor('pcm-processor', PCMProcessor);
+  `;
+
+  const blob = new Blob([workletCode], { type: 'application/javascript' });
+  const workletUrl = URL.createObjectURL(blob);
+  await audioCtx.audioWorklet.addModule(workletUrl);
+
+  micSourceNode = audioCtx.createMediaStreamSource(micStream);
+  processorNode = new AudioWorkletNode(audioCtx, 'pcm-processor');
+
+  processorNode.port.onmessage = (event) => {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    ws.send(event.data);
+  };
+
+  micSourceNode.connect(processorNode);
+  processorNode.connect(audioCtx.destination);
+  nextAudioPlayTime = audioCtx.currentTime;
+}
+
+function playAudioBufferChunk(buffer) {
+  if (!audioCtx) return;
+  const int16 = new Int16Array(buffer);
+  const float32Buffer = audioCtx.createBuffer(1, int16.length, SAMPLE_RATE);
+  const channelData = float32Buffer.getChannelData(0);
+  
+  for (let i = 0; i < int16.length; i++) {
+    channelData[i] = int16[i] / (int16[i] < 0 ? 0x8000 : 0x7fff);
+  }
+
+  const bufferSource = audioCtx.createBufferSource();
+  bufferSource.buffer = float32Buffer;
+  bufferSource.connect(audioCtx.destination);
+
+  // FIX: Absolute structural anchor clock prevents buffer gaps and packet stuttering
+  const now = audioCtx.currentTime;
+  if (nextAudioPlayTime < now) {
+    nextAudioPlayTime = now;
+  }
+  bufferSource.start(nextAudioPlayTime);
+  nextAudioPlayTime += float32Buffer.duration;
+}
+
+async function connectToDeepgram() {
+  applyUI("connecting", "Connecting…");
+  
+  let token;
+  try {
+    token = await fetchToken();
+  } catch (err) {
+    applyUI("error", "Auth failed — check server logs", "error");
+    console.error("[Auth]", err);
+    return;
+  }
+
+  try {
+    ws = new WebSocket(DEEPGRAM_WS_ENDPOINT);
+    ws.binaryType = "arraybuffer";
+  } catch (err) {
+    applyUI("error", "WebSocket failed to open", "error");
+    console.error("[WS]", err);
+    return;
+  }
+
+  ws.addEventListener("open", async () => {
+    console.log("[WS] Connected — sending Settings.");
+    ws.send(JSON.stringify(SETTINGS_PAYLOAD));
+
+    try {
+      await startMicCapture();
+    } catch (err) {
+      applyUI("error", "Microphone access denied", "error");
+      console.error("[Mic]", err);
+      ws.close();
+    }
+  });
+
+  ws.addEventListener("message", (event) => {
+    if (typeof event.data === "string") {
+      console.log("[DG RAW]", event.data);  // ADD THIS LINE
+      handleDeepgramEvent(JSON.parse(event.data));
+    } else if (event.data instanceof ArrayBuffer) {
+      playAudioBufferChunk(event.data);
+    }
+  });
+
+  ws.addEventListener("close", () => {
+    teardown();
+    if (appState !== "idle") applyUI("idle", "Ready", "");
+  });
+
+  ws.addEventListener("error", (event) => {
+    console.error("[WS] Error:", event);
+    applyUI("error", "Connection error", "error");
+    teardown();
+  });
+}
+
+function handleDeepgramEvent(ev) {
+  const t = ev.type || "unknown";
+  switch (t) {
+    case "SettingsApplied":
+      applyUI("active", "Listening…", "listening");
+      break;
+    case "UserStartedSpeaking":
+      nextAudioPlayTime = audioCtx ? audioCtx.currentTime : 0;
+      applyUI("active", "Listening…", "listening");
+      break;
+    case "AgentThinking":
+      applyUI("active", "Translating…", "translating");
+      break;
+    case "ConversationText":
+      if (ev.content && ev.content.trim()) {
+        addTranscript(ev.role, ev.content);
+      }
+      break;
+    case "AgentStartedSpeaking":
+      applyUI("active", "Speaking…", "speaking");
+      break;
+    case "AgentAudioDone":
+      applyUI("active", "Listening…", "listening");
+      break;
+    case "Error":
+      applyUI("error", ev.description || "Agent error", "error");
+      break;
+  }
+}
+
+function teardown() {
+  if (micStream) { micStream.getTracks().forEach((t) => t.stop()); micStream = null; }
+  if (processorNode) { processorNode.disconnect(); processorNode.port.onmessage = null; processorNode = null; }  if (micSourceNode) { micSourceNode.disconnect(); micSourceNode = null; }
+  if (audioCtx) { audioCtx.close().catch(() => {}); audioCtx = null; }
+  if (ws && ws.readyState === WebSocket.OPEN) { ws.close(1000, "Stopped"); ws = null; }
+  nextAudioPlayTime = 0;
+}
+
+micBtn.addEventListener("click", async () => {
+  if (appState === "idle" || appState === "error") {
+    await connectToDeepgram();
+  } else {
+    teardown();
+    applyUI("idle", "Ready");
+  }
+});
+
+clearBtn.addEventListener("click", () => {
+  while (transcript.firstChild) transcript.removeChild(transcript.firstChild);
+  const empty = document.createElement("div");
+  empty.id = "transcript-empty";
+  empty.textContent = "Speak Arabic · translation appears here";
+  transcript.appendChild(empty);
+});
+</script>
+</body>
+</html>
